@@ -1,0 +1,35 @@
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+__pyenv__/
+
+# Environment variables / secrets (CRITICAL for API keys)
+.env
+.env.local
+.env.*.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDE files
+.vscode/
+.idea/
+*.DS_Store
+
+# Logs
+*.log
+logs/
