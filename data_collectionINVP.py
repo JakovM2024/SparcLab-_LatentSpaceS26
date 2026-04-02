@@ -29,20 +29,25 @@ def get_data(policy_type):
             
         episode_starts.append(len(states))
 
-    np.savez("data/trajectories/" + policy_type +"_policy.npz",
-        states = np.array(states),
-        actions = np.array(actions),
-        next_states = np.array(next_states),
-        safe = np.array(safe_labels),
-        episode_starts = np.array(episode_starts)
-    )
+    ep1_states = safe_labels[episode_starts[0]:episode_starts[1]]
+    print(ep1_states)
+
+    
+##    np.savez("data/trajectories/" + policy_type +"_policy.npz",
+  ##      states = np.array(states),
+  ##      actions = np.array(actions),
+  ##      next_states = np.array(next_states),
+  ##      safe = np.array(safe_labels),
+  ##      episode_starts = np.array(episode_starts)
+  ##  )
+    
 
 def policy(state, policy_type):
 
     if policy_type == "safe":
         angle, angular_vel = state
         force = -60 * angle - 15 * angular_vel
-        return np.clip(force, -10, 10)
+        return np.clip(force, -60, 60)
     
     if policy_type == "unsafe":
         angle, angular_vel = state
