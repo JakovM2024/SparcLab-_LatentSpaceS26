@@ -22,3 +22,21 @@ class Encoder(nn.Module):
     def forward(self, state):
         return self.network(state)
 
+class Decoder(nn.Module):
+    def __init__(self,  state_size = 4, latent_size = 8, hidden_size = 64):
+        super.__init__()
+        self.network = nn.Sequential(
+            nn.Linear(latent_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU,
+            nn.Linear(hidden_size, state_size)
+        )
+    def forward(self, state):
+        return self.network(state)
+    
+class AutoEncoder():
+    def __init__(self):
+        self.encoder = Encoder()
+        self.decoder = Decoder()
+    def forward(self):
