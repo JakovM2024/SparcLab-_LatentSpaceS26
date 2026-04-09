@@ -46,12 +46,12 @@ class WorldModel(nn.Module):
         self.decoder = Decoder(state_size, latent_size, hidden_size)
         self.dynamics = Dynamics(latent_size, action_size, hidden_size)
 
-    def forward(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
-        z = self.encoder(x)
-        z_1 = self.dynamics(z)
-        x_latent_reconstructed = self.decoder(z_1)
-        x_reconstructed = self.decoder(z)
-        return x_reconstructed
+    def forward(self, state: torch.Tensor, next_state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        z = self.encoder(state)
+        state_reconstructed = self.decoder(z)
+        z_predicted = self.dynamics(z, action)
+        z_actual = self.encoder(next_state)
+        return state_reconstructed, z_predicted, z_actual
     
 class Dynamics(nn.Module):
     def __init__(self, latent_size: int = 8, action_size: int = 1, hidden_size: int=64 ):
