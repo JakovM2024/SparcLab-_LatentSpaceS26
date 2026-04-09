@@ -35,13 +35,13 @@ def get_data(policy_type):
     print('\n')
 
     
-##    np.savez("data/trajectories/" + policy_type +"_policy.npz",
-  ##      states = np.array(states),
-  ##      actions = np.array(actions),
-  ##      next_states = np.array(next_states),
-  ##      safe = np.array(safe_labels),
-  ##      episode_starts = np.array(episode_starts)
-  ##  )
+    np.savez("data/trajectories/" + policy_type +"_policy.npz",
+        states = np.array(states),
+        actions = np.array(actions),
+        next_states = np.array(next_states),
+        safe = np.array(safe_labels),
+        episode_starts = np.array(episode_starts)
+    )
     
 
 def policy(state, policy_type):
