@@ -19,7 +19,6 @@ class Encoder(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, latent_size)
         )
-
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         return self.network(state)
 
@@ -63,12 +62,14 @@ class Dynamics(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, latent_size)
         )
-    def forward(self, z: torch.Tensor) -> torch.Tensor:
-        return self.network(z)
+    def forward(self, z: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        return self.network(torch.cat([z, action]), dim =-1)
+    
 
-if __name__ == "__main__":
-    rand_int = torch.rand(1,2)
-    print(rand_int)
-    model = WorldModel()
-    rand_int = model.forward(rand_int)
-    print(rand_int)
+
+#if __name__ == "__main__":
+#    rand_int = torch.rand(1,2)
+#    print(rand_int)
+#    model = WorldModel()
+#    rand_int = model.forward(rand_int)
+#    print(rand_int)
