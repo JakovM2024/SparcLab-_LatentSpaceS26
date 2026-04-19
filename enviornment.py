@@ -2,47 +2,52 @@ import gymnasium as gym
 import numpy as np
 import random
 import math
+from PIL import Image, ImageDraw
+
+IMG_SIZE = 84
+POLE_LEN = 55  # pixels
 
 class Environment(gym.Env):
     metadata = {"render_modes" : "human", "render_fps": 4}
-    
 
     def __init__(self, num_steps = 10000, render_mode = "human"):
-        
+
         self.action_space = gym.spaces.Box(low = -10, high = 10, shape = (1,), dtype = np.float32)
         self.window_size = 512
         self.num_steps = num_steps
         self.curr_step = 0
 
-        #array holds these values, [pole angle, pole angular velocity
-        low_bounds = np.array([-.5, -np.inf])
-        high_bounds = np.array([.5, np.inf])
+        self.observation_space = gym.spaces.Box(
+            low=0, high=255, shape=(IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8
+        )
 
-        self.observation_space = gym.spaces.Box(low = low_bounds, high = high_bounds, shape = (2,), dtype = np.float32) 
-
-        
         rand_angle = random.uniform(-.1, .1)
-        self.state = np.array([rand_angle , 0], dtype = np.float32)
-        
-        #[pole angle, pole angular velocity]
-        #self._target_location = np.array([0, 0], dtype = np.float32) try learning without telling it to keep the pole upright
+        self.state = np.array([rand_angle, 0], dtype=np.float32)
 
-        #self.render_mode = self.metadata[render_mode]
+    def render(self):
+        img = Image.new("RGB", (IMG_SIZE, IMG_SIZE), (0, 0, 0))
+        draw = ImageDraw.Draw(img)
 
-    
+        cx, cy = IMG_SIZE // 2, IMG_SIZE - 10
+        angle = float(self.state[0])
+        tip_x = cx + int(POLE_LEN * math.sin(angle))
+        tip_y = cy - int(POLE_LEN * math.cos(angle))
+
+        draw.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], fill=(180, 180, 180))
+        draw.line([cx, cy, tip_x, tip_y], fill=(255, 80, 80), width=10)
+        draw.ellipse([tip_x - 10, tip_y - 10, tip_x + 10, tip_y + 10], fill=(255, 80, 80))
+
+        return np.array(img, dtype=np.uint8)
+
     def _get_obs(self):
-        return self.state
-    
-    def reset(self, seed = None, options = None):
+        return self.render()
+
+    def reset(self, seed=None, options=None):
         rand_angle = random.uniform(-.1, .1)
-        self.state = np.array([rand_angle , 0], dtype = np.float32)
+        self.state = np.array([rand_angle, 0], dtype=np.float32)
         self.curr_step = 0
+        return self._get_obs(), 0
 
-        observation = self._get_obs()
-        #self._render_frame()
-
-        return observation, 0
-    
     def step(self, action):
         angle, angular_vel = self.state
 
@@ -52,8 +57,8 @@ class Environment(gym.Env):
         delta_time = .02
         damping = .1
 
-        angular_acceleration = ((gravity / pole_length) * math.sin(angle) ) - action/ (mass * pole_length**2) - \
-                                (damping / (mass * pole_length**2)) * angular_vel 
+        angular_acceleration = ((gravity / pole_length) * math.sin(angle)) - action / (mass * pole_length**2) - \
+                                (damping / (mass * pole_length**2)) * angular_vel
         angular_vel = angular_vel + angular_acceleration * delta_time
         angle = angle + angular_vel * delta_time
 
@@ -65,22 +70,7 @@ class Environment(gym.Env):
 
         if angle > .4 or angle < -.4:
             done = True
-        
         else:
             reward += .5
-        
-        #if self.num_steps <= self.curr_step:
-        #    truncated = True
-        
-        #self.curr_step += 1
 
-        return self.state, reward, done, truncated, 0
-        
-
-
-
-
-
-
-
-
+        return self._get_obs(), reward, done, truncated, 0
