@@ -2,6 +2,9 @@ collect:
 	mkdir -p data/trajectories
 	python3 data_collectionINVP.py
 
+collect_demo:
+	python3 -c "from data_collectionINVP import get_data; get_data('demo')"
+
 train:
 	mkdir -p data/models
 	python3 train_WM.py

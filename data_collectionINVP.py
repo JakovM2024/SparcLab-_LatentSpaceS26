@@ -49,6 +49,12 @@ def policy(state, policy_type):
         force = -10 * angle - 2 * angular_vel
         return np.clip(force, -10, 10)
 
+    if policy_type == "demo":
+        angle, angular_vel = state
+        force = -(100 * angle + 32 * angular_vel) + np.random.uniform(-5, 5)
+        return np.clip(force, -60, 60)
+
 if __name__ == "__main__":
     get_data("safe")
     get_data("unsafe")
+    get_data("demo")

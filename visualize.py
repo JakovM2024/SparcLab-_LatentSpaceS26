@@ -18,11 +18,9 @@ def load_models():
 
 
 def load_random_images():
-    safe = np.load("data/trajectories/safe_policy.npz")
-    unsafe = np.load("data/trajectories/unsafe_policy.npz")
-    all_states = np.concatenate([safe["states"], unsafe["states"]], axis=0)
-    indices = np.random.choice(len(all_states), NUM_EXAMPLES, replace=False)
-    return all_states[indices]  # (NUM_EXAMPLES, 84, 84, 3) uint8
+    demo = np.load("data/trajectories/demo_policy.npz")
+    indices = np.random.choice(len(demo["states"]), NUM_EXAMPLES, replace=False)
+    return demo["states"][indices]  # (NUM_EXAMPLES, 84, 84, 3) uint8
 
 
 def reconstruct(encoder, decoder, images):

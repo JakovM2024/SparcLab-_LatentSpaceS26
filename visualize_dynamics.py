@@ -5,6 +5,7 @@ from latent_encoder import Encoder, Decoder, Dynamics
 
 NUM_EXAMPLES = 6
 LATENT_SIZE = 16
+ROLLOUT_STEPS = 10
 
 
 def load_models():
@@ -23,50 +24,53 @@ def load_models():
 
 
 def sample_examples(encoder, decoder, dynamics):
-    data = np.load("data/trajectories/safe_policy.npz")
+    data = np.load("data/trajectories/demo_policy.npz")
     starts = data["episode_starts"]
     states = data["states"]
     actions = data["actions"]
     window = dynamics.window
 
-    current_imgs, true_next_imgs, pred_next_imgs = [], [], []
+    current_imgs, true_future_imgs, pred_future_imgs = [], [], []
 
-    # pick random valid timesteps across random episodes
     rng = np.random.default_rng()
     while len(current_imgs) < NUM_EXAMPLES:
         ep = rng.integers(0, len(starts) - 1)
         ep_states = states[starts[ep]:starts[ep + 1]]
         ep_actions = actions[starts[ep]:starts[ep + 1]]
 
-        if len(ep_states) <= window + 1:
+        # need enough history for the window and enough future for the rollout
+        if len(ep_states) <= window + ROLLOUT_STEPS:
             continue
 
-        t = rng.integers(window, len(ep_states) - 1)
+        t = rng.integers(window, len(ep_states) - ROLLOUT_STEPS)
 
         with torch.no_grad():
-            # encode the window of frames ending at t
-            window_imgs = torch.from_numpy(ep_states[t - window:t])   # (window, 84, 84, 3)
-            z_window = encoder(window_imgs).unsqueeze(0)               # (1, window, latent_size)
+            # encode the initial window of real frames ending at t
+            z_window = encoder(torch.from_numpy(ep_states[t - window:t]))  # (window, latent)
 
-            action = torch.tensor(ep_actions[t - 1], dtype=torch.float32).unsqueeze(0)  # (1, 1)
+            # roll dynamics forward ROLLOUT_STEPS using real actions
+            for step in range(ROLLOUT_STEPS):
+                action = torch.tensor(ep_actions[t + step], dtype=torch.float32).unsqueeze(0)  # (1, 1)
+                z_pred = dynamics(z_window.unsqueeze(0), action).squeeze(0)  # (latent,)
 
-            # dynamics predicts next latent, decoder turns it into an image
-            z_pred = dynamics(z_window, action)                        # (1, latent_size)
-            pred_img = decoder(z_pred).squeeze(0).numpy()              # (84, 84, 3)
+                # slide window: drop oldest, append prediction
+                z_window = torch.cat([z_window[1:], z_pred.unsqueeze(0)], dim=0)
 
-        current_imgs.append(ep_states[t - 1])        # uint8
-        true_next_imgs.append(ep_states[t])           # uint8
-        pred_next_imgs.append(np.clip(pred_img, 0, 1))
+            pred_img = decoder(z_pred.unsqueeze(0)).squeeze(0).numpy()  # (84, 84, 3)
 
-    return current_imgs, true_next_imgs, pred_next_imgs
+        current_imgs.append(ep_states[t - 1])
+        true_future_imgs.append(ep_states[t + ROLLOUT_STEPS - 1])
+        pred_future_imgs.append(np.clip(pred_img, 0, 1))
+
+    return current_imgs, true_future_imgs, pred_future_imgs
 
 
-def show(current_imgs, true_next_imgs, pred_next_imgs):
+def show(current_imgs, true_future_imgs, pred_future_imgs):
     fig, axes = plt.subplots(3, NUM_EXAMPLES, figsize=(NUM_EXAMPLES * 2, 7))
-    fig.suptitle("World Model Dynamics Predictions", fontsize=14, fontweight="bold")
+    fig.suptitle(f"Dynamics rollout: {ROLLOUT_STEPS} steps ahead", fontsize=14, fontweight="bold")
 
-    row_labels = ["Current", "True next", "Predicted\nnext"]
-    all_rows = [current_imgs, true_next_imgs, pred_next_imgs]
+    row_labels = ["Current (t)", f"True (t+{ROLLOUT_STEPS})", f"Predicted\n(t+{ROLLOUT_STEPS})"]
+    all_rows = [current_imgs, true_future_imgs, pred_future_imgs]
     row_y_positions = [0.78, 0.46, 0.14]
 
     for row, (imgs, label) in enumerate(zip(all_rows, row_labels)):
@@ -86,5 +90,5 @@ def show(current_imgs, true_next_imgs, pred_next_imgs):
 
 if __name__ == "__main__":
     encoder, decoder, dynamics = load_models()
-    current_imgs, true_next_imgs, pred_next_imgs = sample_examples(encoder, decoder, dynamics)
-    show(current_imgs, true_next_imgs, pred_next_imgs)
+    current_imgs, true_future_imgs, pred_future_imgs = sample_examples(encoder, decoder, dynamics)
+    show(current_imgs, true_future_imgs, pred_future_imgs)
