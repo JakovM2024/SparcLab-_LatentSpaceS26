@@ -33,3 +33,5 @@ build/
 # Logs
 *.log
 logs/
+
+trajectories/

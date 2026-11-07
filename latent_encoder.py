@@ -69,6 +69,19 @@ class Dynamics(nn.Module):
         x = torch.cat([z_window.flatten(1), action], dim=-1)
         return self.network(x)
 
+class Margin(nn.Module):
+    def __init__(self, latent_size: int = 16, hidden_size: int = 128):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(latent_size, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, 1)
+        )
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        return self.network(z).squeeze(-1)
 
 class WorldModel(nn.Module):
     def __init__(self, latent_size: int = 16, action_size: int = 1, hidden_size: int = 128):

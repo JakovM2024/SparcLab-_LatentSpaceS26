@@ -19,4 +19,11 @@ visualize:
 visualize_dynamics:
 	python3 visualize_dynamics.py
 
+train_margin:
+	mkdir -p data/models
+	python3 train_margin.py
+
+visualize_margin:
+	python3 visualize_margin.py
+
 all: collect train train_dynamics visualize
