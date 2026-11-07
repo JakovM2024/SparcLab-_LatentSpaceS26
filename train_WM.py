@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from latent_encoder import Encoder, Decoder
 from data_utils import load_split
 
+DEVICE = torch.device("cude" if torch.cuda.is_available() else "cpu")
+
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-3
 BRIGHT_PENALTY = 20  # how many times harder to miss a bright pixel than a dark one
@@ -34,6 +36,7 @@ class Trainer():
         encoder.eval(); decoder.eval()
         total, n = 0.0, 0
         for (batch,) in DataLoader(self.val_set, batch_size=256):
+            batch = batch.to(DEVICE)
             total += weighted_mse(decoder(encoder(batch)), batch).item() * len(batch)
             n += len(batch)
         encoder.train(); decoder.train()
@@ -87,8 +90,8 @@ if __name__ == "__main__":
     print(f"{len(train['obs'])} train frames ({len(train['episode_starts']) - 1} episodes), "
           f"{len(val['obs'])} val frames ({len(val['episode_starts']) - 1} episodes)")
 
-    encoder = Encoder(latent_size=16)
-    decoder = Decoder(latent_size=16)
+    encoder = Encoder(latent_size=16).to(DEVICE)
+    decoder = Decoder(latent_size=16).to(DEVICE)
     trainer = Trainer(train["obs"], val["obs"], epochs=args.epochs)
     enc_state, dec_state = trainer.train(encoder, decoder)
 

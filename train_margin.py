@@ -7,6 +7,8 @@ import torch.optim as optim
 from latent_encoder import Encoder, Margin
 from data_utils import load_split
 
+DEVICE = torch.device("cude" if torch.cuda.is_available() else "cpu")
+
 BATCH_SIZE = 256
 FAIL_BAND = (0.35, 0.45)  # |theta| range near the boundary, where errors concentrate
 
@@ -34,14 +36,14 @@ def parse_args():
 def encode(encoder, images):
     with torch.no_grad():
         return torch.cat([
-            encoder(torch.from_numpy(images[b:b + BATCH_SIZE]))
+            encoder(torch.from_numpy(images[b:b + BATCH_SIZE]).to(DEVICE))
             for b in range(0, len(images), BATCH_SIZE)
         ])
 
 
 def gradient_penalty(margin, z_safe, z_fail, beta, one_sided):
     # z_hat: random points between safe/failed latent pairs, where the boundary lives
-    alpha = torch.rand(len(z_safe), 1)
+    alpha = torch.rand(len(z_safe), 1,deivce = z_safe.device)
     z_hat = (alpha * z_safe + (1 - alpha) * z_fail).requires_grad_(True)
     grad = torch.autograd.grad(margin(z_hat).sum(), z_hat, create_graph=True)[0]
     gap = grad.norm(dim=1) - beta
@@ -67,7 +69,7 @@ def boundary_distances(z_safe, z_fail, max_points=4000, seed=0):
     g = torch.Generator().manual_seed(seed)
     zs = z_safe[torch.randperm(len(z_safe), generator=g)[:max_points]]
     zf = z_fail[torch.randperm(len(z_fail), generator=g)[:max_points]]
-    d = torch.cdist(zf, zs).min(dim=1).values.numpy()
+    d = torch.cdist(zf, zs).min(dim=1).values.cpu().numpy()
     return {q: float(np.quantile(d, q)) for q in (0.0, 0.1, 0.5, 0.9)}
 
 
@@ -75,7 +77,7 @@ def boundary_distances(z_safe, z_fail, max_points=4000, seed=0):
 def evaluate(margin, z, safe, theta, episode_starts):
     """Confusion matrix (TP = predicted safe and truly safe, as in the paper), accuracy in the
     band around the boundary, and smoothness: max |m(z_{t+1}) - m(z_t)| per episode."""
-    m = margin(z).numpy()
+    m = margin(z).cpu().numpy()
     pred = m > 0
     out = {
         "TP": float(np.mean(pred & safe)), "TN": float(np.mean(~pred & ~safe)),
@@ -103,8 +105,8 @@ if __name__ == "__main__":
     assert args.bound > 1, "bound must exceed the hinge targets (+-1)"
     torch.manual_seed(args.seed)
 
-    encoder = Encoder(latent_size=16)
-    encoder.load_state_dict(torch.load("data/models/encoder.pt", weights_only=True))
+    encoder = Encoder(latent_size=16).to(DEVICE)
+    encoder.load_state_dict(torch.load("data/models/encoder.pt", weights_only=True, map_location=DEVICE))
     encoder.eval()
 
     keys = ("obs", "safe", "theta")
@@ -115,7 +117,7 @@ if __name__ == "__main__":
 
     print("Encoding frames...")
     z_train, z_val = encode(encoder, train["obs"]), encode(encoder, val["obs"])
-    safe_train = torch.from_numpy(train["safe"])
+    safe_train = torch.from_numpy(train["safe"]).to(DEVICE)
     z_safe, z_fail = z_train[safe_train], z_train[~safe_train]
     print(f"train: {len(z_safe)} safe / {len(z_fail)} failed latents   val: {len(z_val)} frames")
 
@@ -124,7 +126,7 @@ if __name__ == "__main__":
           + "  ".join(f"q{int(q * 100)}={v:.3f}" for q, v in d.items())
           + f"   (hinge at +-1 with slope beta={args.beta} needs >= {2 / args.beta:.2f})")
 
-    margin = Margin(latent_size=16, bound=args.bound)
+    margin = Margin(latent_size=16, bound=args.bound).to(DEVICE)
     optimizer = optim.Adam(margin.parameters(), lr=args.lr)
     steps_per_epoch = max(1, len(z_safe) // BATCH_SIZE)
 

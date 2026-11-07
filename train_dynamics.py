@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from latent_encoder import Encoder, Dynamics
 from data_collectionINVP import POLICY_TYPES
 
+DEVICE = torch.device("cude" if torch.cuda.is_available() else "cpu")
+
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-3
 EPOCHS = 20
@@ -56,13 +58,13 @@ def build_window_dataset(encoder: Encoder, data, window: int):
 
 
 if __name__ == "__main__":
-    encoder = Encoder(latent_size=16)
-    encoder.load_state_dict(torch.load("data/models/encoder.pt", weights_only=True))
+    encoder = Encoder(latent_size=16).to(DEVICE)
+    encoder.load_state_dict(torch.load("data/models/encoder.pt", weights_only=True, map_location=DEVICE))
     encoder.eval()
     for p in encoder.parameters():
         p.requires_grad = False
 
-    dynamics = Dynamics(latent_size=16)
+    dynamics = Dynamics(latent_size=16).to(DEVICE)
 
     print("Encoding episodes...")
     parts = [
@@ -83,6 +85,7 @@ if __name__ == "__main__":
     for epoch in range(EPOCHS):
         total_loss = 0.0
         for z_win, act, z_tgt in loader:
+            z_win, act, z_tgt = z_win.to(DEVICE), act.to(DEVICE), z_tgt.to(DEVICE) 
             z_pred = dynamics(z_win, act)
             loss = loss_fn(z_pred, z_tgt)
             optimizer.zero_grad()
