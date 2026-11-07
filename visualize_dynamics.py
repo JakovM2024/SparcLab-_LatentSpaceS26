@@ -6,6 +6,7 @@ from latent_encoder import Encoder, Decoder, Dynamics
 NUM_EXAMPLES = 6
 LATENT_SIZE = 16
 ROLLOUT_STEPS = 10
+DATASET = "pd_then_random"  # crosses the boundary in both directions
 
 
 def load_models():
@@ -24,33 +25,39 @@ def load_models():
 
 
 def sample_examples(encoder, decoder, dynamics):
-    data = np.load("data/trajectories/demo_policy.npz")
-    starts = data["episode_starts"]
-    states = data["states"]
+    data = np.load(f"data/trajectories/{DATASET}_policy.npz")
+    frame_starts = data["episode_starts"]
+    action_starts = data["action_starts"]
+    obs = data["obs"]
     actions = data["actions"]
+    theta = data["theta"]
     window = dynamics.window
 
-    current_imgs, true_future_imgs, pred_future_imgs = [], [], []
+    current_imgs, true_future_imgs, pred_future_imgs, true_thetas = [], [], [], []
 
     rng = np.random.default_rng()
     while len(current_imgs) < NUM_EXAMPLES:
-        ep = rng.integers(0, len(starts) - 1)
-        ep_states = states[starts[ep]:starts[ep + 1]]
-        ep_actions = actions[starts[ep]:starts[ep + 1]]
+        ep = rng.integers(0, len(frame_starts) - 1)
+        ep_obs = obs[frame_starts[ep]:frame_starts[ep + 1]]              # (T+1, 84, 84, 3)
+        ep_theta = theta[frame_starts[ep]:frame_starts[ep + 1]]          # (T+1,)
+        ep_actions = actions[action_starts[ep]:action_starts[ep + 1]]    # (T, 1)
 
         # need enough history for the window and enough future for the rollout
-        if len(ep_states) <= window + ROLLOUT_STEPS:
+        if len(ep_obs) < window + ROLLOUT_STEPS:
             continue
 
-        t = rng.integers(window, len(ep_states) - ROLLOUT_STEPS)
+        # window = frames [t-window, t); rollout predicts frames t .. t+ROLLOUT_STEPS-1
+        t = rng.integers(window, len(ep_obs) - ROLLOUT_STEPS + 1)
 
         with torch.no_grad():
             # encode the initial window of real frames ending at t
-            z_window = encoder(torch.from_numpy(ep_states[t - window:t]))  # (window, latent)
+            z_window = encoder(torch.from_numpy(ep_obs[t - window:t]))  # (window, latent)
 
-            # roll dynamics forward ROLLOUT_STEPS using real actions
+            # roll dynamics forward ROLLOUT_STEPS using real actions.
+            # actions[k] moves frame k to frame k+1, so predicting frame t+step uses actions[t+step-1]
+            # (same alignment as train_dynamics.py)
             for step in range(ROLLOUT_STEPS):
-                action = torch.tensor(ep_actions[t + step], dtype=torch.float32).unsqueeze(0)  # (1, 1)
+                action = torch.tensor(ep_actions[t + step - 1], dtype=torch.float32).unsqueeze(0)  # (1, 1)
                 z_pred = dynamics(z_window.unsqueeze(0), action).squeeze(0)  # (latent,)
 
                 # slide window: drop oldest, append prediction
@@ -58,18 +65,19 @@ def sample_examples(encoder, decoder, dynamics):
 
             pred_img = decoder(z_pred.unsqueeze(0)).squeeze(0).numpy()  # (84, 84, 3)
 
-        current_imgs.append(ep_states[t - 1])
-        true_future_imgs.append(ep_states[t + ROLLOUT_STEPS - 1])
+        current_imgs.append(ep_obs[t - 1])
+        true_future_imgs.append(ep_obs[t + ROLLOUT_STEPS - 1])
+        true_thetas.append((ep_theta[t - 1], ep_theta[t + ROLLOUT_STEPS - 1]))
         pred_future_imgs.append(np.clip(pred_img, 0, 1))
 
-    return current_imgs, true_future_imgs, pred_future_imgs
+    return current_imgs, true_future_imgs, pred_future_imgs, true_thetas
 
 
-def show(current_imgs, true_future_imgs, pred_future_imgs):
+def show(current_imgs, true_future_imgs, pred_future_imgs, true_thetas):
     fig, axes = plt.subplots(3, NUM_EXAMPLES, figsize=(NUM_EXAMPLES * 2, 7))
     fig.suptitle(f"Dynamics rollout: {ROLLOUT_STEPS} steps ahead", fontsize=14, fontweight="bold")
 
-    row_labels = ["Current (t)", f"True (t+{ROLLOUT_STEPS})", f"Predicted\n(t+{ROLLOUT_STEPS})"]
+    row_labels = ["Current (t-1)", f"True (t+{ROLLOUT_STEPS})", f"Predicted\n(t+{ROLLOUT_STEPS})"]
     all_rows = [current_imgs, true_future_imgs, pred_future_imgs]
     row_y_positions = [0.78, 0.46, 0.14]
 
@@ -79,7 +87,9 @@ def show(current_imgs, true_future_imgs, pred_future_imgs):
             ax.imshow(img)
             ax.axis("off")
             if row == 0:
-                ax.set_title(f"Example {col + 1}", fontsize=10)
+                ax.set_title(f"Example {col + 1}\nθ = {true_thetas[col][0]:+.2f}", fontsize=10)
+            if row == 1:
+                ax.set_title(f"θ = {true_thetas[col][1]:+.2f}", fontsize=9)
 
         fig.text(0.08, row_y_positions[row], label, fontsize=11,
                  va="center", ha="right", fontweight="bold")
@@ -90,5 +100,5 @@ def show(current_imgs, true_future_imgs, pred_future_imgs):
 
 if __name__ == "__main__":
     encoder, decoder, dynamics = load_models()
-    current_imgs, true_future_imgs, pred_future_imgs = sample_examples(encoder, decoder, dynamics)
-    show(current_imgs, true_future_imgs, pred_future_imgs)
+    current_imgs, true_future_imgs, pred_future_imgs, true_thetas = sample_examples(encoder, decoder, dynamics)
+    show(current_imgs, true_future_imgs, pred_future_imgs, true_thetas)

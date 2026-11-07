@@ -70,8 +70,16 @@ class Dynamics(nn.Module):
         return self.network(x)
 
 class Margin(nn.Module):
-    def __init__(self, latent_size: int = 16, hidden_size: int = 128):
+    """Latent margin l(z): > 0 safe, < 0 failed.
+
+    The output is bounded to (-bound, bound) because the discounted safety value
+    function only exists and is unique for a bounded margin. bound must exceed the
+    hinge targets (+-1) in train_margin.py, or the hinge can never be satisfied and
+    training pushes the tanh into saturation, which makes l(z) steep at the boundary.
+    """
+    def __init__(self, latent_size: int = 16, hidden_size: int = 128, bound: float = 2.0):
         super().__init__()
+        self.bound = bound
         self.network = nn.Sequential(
             nn.Linear(latent_size, hidden_size),
             nn.Tanh(),
@@ -81,7 +89,7 @@ class Margin(nn.Module):
         )
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        return self.network(z).squeeze(-1)
+        return self.bound * torch.tanh(self.network(z).squeeze(-1) / self.bound)
 
 class WorldModel(nn.Module):
     def __init__(self, latent_size: int = 16, action_size: int = 1, hidden_size: int = 128):
