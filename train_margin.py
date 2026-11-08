@@ -7,7 +7,7 @@ import torch.optim as optim
 from latent_encoder import Encoder, Margin
 from data_utils import load_split
 
-DEVICE = torch.device("cude" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 BATCH_SIZE = 256
 FAIL_BAND = (0.35, 0.45)  # |theta| range near the boundary, where errors concentrate
@@ -43,7 +43,7 @@ def encode(encoder, images):
 
 def gradient_penalty(margin, z_safe, z_fail, beta, one_sided):
     # z_hat: random points between safe/failed latent pairs, where the boundary lives
-    alpha = torch.rand(len(z_safe), 1,deivce = z_safe.device)
+    alpha = torch.rand(len(z_safe), 1, device=z_safe.device)
     z_hat = (alpha * z_safe + (1 - alpha) * z_fail).requires_grad_(True)
     grad = torch.autograd.grad(margin(z_hat).sum(), z_hat, create_graph=True)[0]
     gap = grad.norm(dim=1) - beta

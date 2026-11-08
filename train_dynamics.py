@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from latent_encoder import Encoder, Dynamics
 from data_collectionINVP import POLICY_TYPES
 
-DEVICE = torch.device("cude" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-3
@@ -41,7 +41,7 @@ def build_window_dataset(encoder: Encoder, data, window: int):
         # encode episode in mini-batches to avoid OOM
         with torch.no_grad():
             ep_latents = torch.cat([
-                encoder(torch.from_numpy(ep_imgs[b:b + BATCH_SIZE]))
+                encoder(torch.from_numpy(ep_imgs[b:b + BATCH_SIZE]).to(DEVICE))
                 for b in range(0, len(ep_imgs), BATCH_SIZE)
             ])  # (T+1, latent_size)
 

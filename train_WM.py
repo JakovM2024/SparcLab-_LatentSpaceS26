@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from latent_encoder import Encoder, Decoder
 from data_utils import load_split
 
-DEVICE = torch.device("cude" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-3
@@ -55,6 +55,7 @@ class Trainer():
         for epoch in range(self.epochs):
             total_loss = 0.0
             for (batch,) in loader:
+                batch = batch.to(DEVICE)
                 loss = weighted_mse(decoder(encoder(batch)), batch)
                 optimizer.zero_grad()
                 loss.backward()
