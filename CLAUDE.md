@@ -95,8 +95,8 @@ data) so the PCBF bound is meaningful is the core novelty.
 | `train_WM.py` | Stage 1a: autoencoder, brightness-weighted MSE, keeps best-val checkpoint → `encoder.pt`, `decoder.pt`. |
 | `train_dynamics.py` | Stage 1b: frozen encoder, trains `Dynamics` with MSE in latent space → `dynamics.pt`. (Uses all data, no val split.) |
 | `train_margin.py` | Stage 2: margin l(z). Flags for hinge ±1, WGAN rank term, GP (two- or one-sided, target β), `--run-name` writes `data/runs/<name>.json`. Prints nearest-safe distances (hinge ±1 with slope β needs gap ≥ 2/β). |
-| `train_value.py` | Stage 3: TD3-style (twin critics, target smoothing, delayed actor) with the LatentCBF target, 50/50 mix of imagined safety rollouts and real nominal transitions, γ annealed 0.9 → 0.99. Saves `value_actor.pt` / `value_critic.pt`. |
-| `value_function.py` | `Actor`, twin `Critic`, `safety_value(actor, critic, w) = Q_min(w, π(w))`. RL state = window of 3 latents (one frame shows θ but not ω). |
+| `train_value.py` | Stage 3: actor-critic with the LatentCBF target, clamped to ±`margin_bound`; single critic by default (`--n-critics 2` = TD3 twin critics with min in the target, `--no-target-clamp` reproduces older runs); target smoothing + delayed actor kept from TD3; 50/50 mix of imagined safety rollouts and real nominal transitions, γ annealed 0.9 → 0.99. Saves `value_actor.pt` / `value_critic.pt`. |
+| `value_function.py` | `Actor`, `Critic` (`n_heads` 1 or 2), `load_critic` (infers heads from a checkpoint), `safety_value(actor, critic, w) = Q(w, π(w))`. RL state = window of 3 latents (one frame shows θ but not ω). |
 | `ground_truth.py` | Value iteration on the true (θ, ω) grid → viability kernel. The answer key for the learned V. |
 | `visualize*.py` | Reconstructions, dynamics rollouts, margin, and learned V vs ground truth (sign agreement, unsafe-called-safe rate). |
 | `data/models/` | Checkpoints: encoder, decoder, dynamics, margin, margin_paper, margin_smoke (`.pt`). |
@@ -126,12 +126,16 @@ Stack: Python 3.10, PyTorch (CUDA if available, else CPU), Gymnasium, NumPy, PIL
   and gets 98% val acc but only 67% accuracy in the |θ| ∈ [0.35, 0.45] band — single-frame latents
   near the boundary overlap (min failed→safe latent distance is 0).
 - Value: the proposal's eq. (4) omits the `(1-γ) l` term; the code follows the paper's target.
-  Code uses TD3 twin critics (paper: single critic), γ 0.99 (paper 0.995), horizon 50 (paper 8),
-  and l bounded by 2·tanh(·/2) rather than tanh.
+  Single critic like the paper (runs before 2026-11-23 used TD3 twin critics; the min over twins biased Q
+  downward and `value_omega3` drifted to V ≈ −45 with l bounded by ±2), plus a target clamp to ±margin_bound.
+  γ 0.99 (paper 0.995) and horizon 50 (paper 8) because our dt is 0.02 s — see ROADMAP rule 2.
+  l bounded by 2·tanh(·/2) rather than tanh.
 - World model is a small deterministic CNN autoencoder + MLP dynamics, not an RSSM / DINO-WM. A
   stochastic or ensembled model will probably be needed for the probabilistic guarantees.
 
 ## Not built yet (next steps)
+
+Full phased plan (DINO encoder swap → physical pendulum → D1 hourglass): see `ROADMAP.md`.
 
 1. The LatentCBF safety filter itself (sampling-based: candidates from π_nom/π_safe/grid, constraint
    `Q(z,a) − ε ≥ α (Q(z, π_safe(z)) − ε)`, closest to π_nom, fallback π_safe) + closed-loop eval in

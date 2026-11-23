@@ -11,7 +11,7 @@ import torch
 import matplotlib.pyplot as plt
 from enviornment import Environment, FAIL_ANGLE
 from latent_encoder import Encoder, WINDOW
-from value_function import Actor, Critic, safety_value
+from value_function import Actor, load_critic, safety_value
 from ground_truth import viability_grid
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     encoder = load(Encoder(latent_size=LATENT_SIZE), "data/models/encoder.pt")
     actor = load(Actor(LATENT_SIZE), f"{args.prefix}_actor.pt")
-    critic = load(Critic(LATENT_SIZE), f"{args.prefix}_critic.pt")
+    critic = load_critic(f"{args.prefix}_critic.pt", LATENT_SIZE, DEVICE)
 
     thetas = np.linspace(-0.6, 0.6, args.n)
     omegas = np.linspace(-args.omega_max, args.omega_max, args.n)

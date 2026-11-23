@@ -1,8 +1,12 @@
-"""Stage 3: learn the safety value function and safety policy with TD3-style actor-critic.
+"""Stage 3: learn the safety value function and safety policy with actor-critic.
 
 Critic target (Smooth LatentCBF, eq. 7):
     y = (1 - gamma) * l(z) + gamma * min{ l(z), Q_target(z', a') }
-where l is the margin on the newest frame of the window.
+where l is the margin on the newest frame of the window. y is then clamped to the margin's range
+[-margin_bound, margin_bound]: the true fixed point always lies there, so the clamp only removes
+bootstrapping drift. Single critic by default (as in the paper); --n-critics 2 gives TD3 twin
+critics with the min in the target. Delayed actor updates, target networks and target-policy
+smoothing are kept from TD3.
 
 Replay data is mixed half and half (the paper's fix for distribution mismatch):
   * safety half:  rollouts imagined in the world model, actions from pi_safe + exploration noise,
@@ -48,6 +52,10 @@ def parse_args():
     p.add_argument("--target-noise", type=float, default=0.1, help="TD3 target smoothing, fraction of A_MAX")
     p.add_argument("--target-noise-clip", type=float, default=0.25, help="fraction of A_MAX")
     p.add_argument("--policy-delay", type=int, default=2)
+    p.add_argument("--n-critics", type=int, choices=[1, 2], default=1,
+                   help="1 = single critic (paper); 2 = TD3 twin critics, min in the target (older runs)")
+    p.add_argument("--no-target-clamp", action="store_true",
+                   help="disable clamping the critic target to [-margin_bound, margin_bound] (older runs)")
     p.add_argument("--data-dir", default="data/trajectories")
     p.add_argument("--out-prefix", default="data/models/value", help="saves <prefix>_actor.pt / _critic.pt")
     p.add_argument("--run-name", default=None, help="if set, write config + metrics to data/runs/value_<name>.json")
@@ -198,7 +206,8 @@ def main():
     print(f"{n_nominal} nominal transitions, {len(start_windows)} start windows, "
           f"{(nominal['l'] < 0).float().mean():.1%} of nominal states have l < 0")
 
-    actor, critic = Actor(LATENT_SIZE).to(DEVICE), Critic(LATENT_SIZE).to(DEVICE)
+    actor = Actor(LATENT_SIZE).to(DEVICE)
+    critic = Critic(LATENT_SIZE, n_heads=args.n_critics).to(DEVICE)
     actor_target, critic_target = copy.deepcopy(actor), copy.deepcopy(critic)
     for net in (actor_target, critic_target):
         for param in net.parameters():
@@ -241,9 +250,11 @@ def main():
             w2, a2 = torch.cat([w2_s, w2_n]), torch.cat([a2_s, a2_n])
             q_next = critic_target.q_min(w2, a2)
             y = (1 - gamma) * l + gamma * torch.minimum(l, q_next)
+            if not args.no_target_clamp:
+                y = y.clamp(-args.margin_bound, args.margin_bound)
 
-        q1, q2 = critic(w, a)
-        critic_loss = F.mse_loss(q1, y) + F.mse_loss(q2, y)
+        qs = critic(w, a)
+        critic_loss = sum(F.mse_loss(q, y) for q in qs)
         opt_critic.zero_grad()
         critic_loss.backward()
         opt_critic.step()
@@ -260,7 +271,7 @@ def main():
             actor_updates += 1
 
         log["critic_loss"] += critic_loss.item()
-        log["q"] += q1.mean().item()
+        log["q"] += qs[0].mean().item()
         log["fail_rate"] += fail_rate
         log["abs_a"] += a_env.abs().mean().item()   # how hard the current safety policy pushes
 
