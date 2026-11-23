@@ -7,7 +7,7 @@ N_EPISODES = 100
 HORIZON = 200          # steps per episode (4 s at dt = 0.02)
 THETA_STOP = 0.6       # keep rolling past failure until here; must stay below MAX_RENDER_ANGLE
 THETA0_RANGE = 0.4     # initial angle sampled uniformly over the whole safe set
-OMEGA0_RANGE = 1.5     # free fall from 0 to 0.4 rad reaches about 1.2 rad/s
+OMEGA0_RANGE = 3.0     # free fall from 0 to 0.4 rad reaches about 1.2 rad/s
 PD_NOISE_STD = 3.0
 OUT_DIR = "data/trajectories"
 
